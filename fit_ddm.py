@@ -36,24 +36,22 @@ sns.plotting_context()
 # all model elements:
 # -------------------
 
-project_dir = '/home/jwdegee/2020_eLife_pupil/'
+project_dir = '/home/jwdegee/repos/2020_eLife_pupil_bias/'
 experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70']
 bin_measures = ['pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s']
 nrs_bins = [5,3,3]
 
-n_jobs = 15
-fit_model = 1
-# versions = [0,1,2,3,4,5]
-# versions = [1]
-# versions = [1,2,]
-# versions = [3,4,]
-# versions = [5,6,]
-versions = [7,8,]
+n_jobs = 25
+fit_model = 0
+versions = [0,1,2,3,4,]
+# versions = [5,6,7,8,9,]
+# versions = [6,7]
+# versions = [8,9]
 # versions = [1,2,3,4]
-# versions = [5]
+# versions = [0]
 
 # for analyse_exp in [0,1,2]:
-for analyse_exp in [2]:
+for analyse_exp in [1,2]:
 
     experiment_name, bin_measure, n_bins = experiment_names[analyse_exp], bin_measures[analyse_exp], nrs_bins[analyse_exp]
 
@@ -61,13 +59,13 @@ for analyse_exp in [2]:
     model_settings = [
         
         # separately per subject:
-        {'urgency':False, 'a_bin': True, 'u_bin': False, 'v_bin':True, 't_bin':True, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
+        {'urgency':True, 'a_bin': True, 'u_bin': False, 'v_bin':True, 't_bin':True, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':True, 'a_bin': False, 'u_bin': True, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
 
-        # pool across subjects:
+        {'urgency':False, 'a_bin': True, 'u_bin': False, 'v_bin':True, 't_bin':True, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
         {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
@@ -129,7 +127,7 @@ for analyse_exp in [2]:
                     params.loc[params_cut.index, bin_measure] = np.array(df_emp.groupby(['subj_idx', 'bin']).mean().reset_index().query('bin=={}'.format(b))[bin_measure])
 
             # empirical SDT:
-            sdt_emp = compute_behavior(df=df_emp, groupby=['subj_idx', 'bin'])
+            sdt_emp = compute_behavior(df=df_emp, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
             sdt_emp[bin_measure] = np.NaN
             for (v, b), params_cut in sdt_emp.groupby(['variable', 'bin']):
                 if len(params_cut.index) == len(sdt_emp['subj_idx'].unique()):
@@ -149,27 +147,27 @@ for analyse_exp in [2]:
                                 for subj_idx, data in df_emp.groupby(['subj_idx']))).reset_index()
 
             # simulated SDT:
-            sdt_sim = compute_behavior(df=df_sim, groupby=['subj_idx', 'bin'])
+            sdt_sim = compute_behavior(df=df_sim, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
             sdt_sim[bin_measure] = np.NaN
             for (v, b), params_cut in sdt_sim.groupby(['variable', 'bin']):
                 if len(params_cut.index) == len(sdt_sim['subj_idx'].unique()):
                     sdt_sim.loc[params_cut.index, bin_measure] = np.array(df_emp.groupby(['subj_idx', 'bin']).mean().reset_index().query('bin=={}'.format(b))[bin_measure])
 
-            # summary plot:
-            for b in range(n_bins):
-                fig = plot_tools.summary_plot_group(df_emp.loc[df['bin']==b,:], df_sim.loc[df_sim['bin']==b,:])
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_model_fit_{}.pdf'.format(experiment_name, version, b)))
+            # # summary plot:
+            # for b in range(n_bins):
+            #     fig = plot_tools.summary_plot_group(df_emp.loc[df['bin']==b,:], df_sim.loc[df_sim['bin']==b,:])
+            #     fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_model_fit_{}.pdf'.format(experiment_name, version, b)))
             
-            if not model_settings[version]['pool']:
+            # if not model_settings[version]['pool']:
 
-                # analysis:
-                fig = mixed_linear_modeling(sdt_emp, x='bin', df_sim=sdt_sim,)
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
+            #     # analysis:
+            #     fig = mixed_linear_modeling(sdt_emp, x='bin', df_sim=sdt_sim,)
+            #     fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
 
-                # analysis:
-                fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
-                # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(experiment_name, version)))
+            #     # analysis:
+            #     fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
+            #     # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
+            #     fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(experiment_name, version)))
 
             # resid:
             resid = pd.DataFrame(sdt_emp.loc[sdt_emp['variable']=='c', ['subj_idx', 'bin', 'value']]).reset_index(drop=True)
@@ -182,18 +180,35 @@ for analyse_exp in [2]:
             bic['model'] = version
             bics.append(bic)
 
-    resids = pd.concat(resids)
-    bics = pd.concat(bics)
-    print()
-    print(experiment_name)
-    print(bics.groupby('model').mean())
-    print(resids.groupby('model').mean())
+    if not fit_model:
 
-    # bics.loc[bics['model']==2, 'value'] = np.array(bics.loc[bics['model']==2, 'value']) - np.array(bics.loc[bics['model']==1, 'value'])
-    # bics.loc[bics['model']==3, 'value'] = np.array(bics.loc[bics['model']==3, 'value']) - np.array(bics.loc[bics['model']==1, 'value'])
-    # bics.loc[bics['model']==4, 'value'] = np.array(bics.loc[bics['model']==4, 'value']) - np.array(bics.loc[bics['model']==1, 'value'])
-    # bics.loc[bics['model']==1, 'value'] = np.array(bics.loc[bics['model']==1, 'value']) - np.array(bics.loc[bics['model']==1, 'value'])
+        resids = pd.concat(resids)
+        bics = pd.concat(bics)
+        print()
+        print(experiment_name)
+        print(bics.groupby('model').mean())
+        print(resids.groupby('model').mean())
 
-    # sns.barplot(x='model', y='value', units='subj_idx', ci=None, data=bics)
-    # sns.stripplot(x='model', y='value', data=bics)
+        bics = bics.loc[bics['model']!=0,:]
+        bics = bics.loc[bics['model']!=5,:]
 
+        subtract = np.array(bics.loc[bics['model']==bics['model'].min(), 'value'])
+        for m in bics['model'].unique():
+            bics.loc[bics['model']==m, 'value'] = np.array(bics.loc[bics['model']==m, 'value']) - subtract
+        fig = plt.figure(figsize=(1.5,1.5))
+        sns.barplot(x='model', y='value', units='subj_idx', ci=None, data=bics)
+        sns.stripplot(x='model', y='value', color='grey', size=2, data=bics)
+        plt.xticks([0,1,2,3], ['z+dc', 'z', 'dc', 'u'])
+        plt.ylabel('Δ BIC')
+        sns.despine(offset=2, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bics.pdf'.format(experiment_name, version)))
+
+        fig = plt.figure(figsize=(1.5,1.5))
+        sns.barplot(x='model', y='value', units='subj_idx', ci=66, data=bics)
+        # sns.stripplot(x='model', y='value', color='grey', data=bics)
+        plt.xticks([0,1,2,3], ['z+dc', 'z', 'dc', 'u'])
+        plt.ylabel('Δ BIC')
+        sns.despine(offset=2, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bics2.pdf'.format(experiment_name, version)))

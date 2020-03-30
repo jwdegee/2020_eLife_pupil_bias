@@ -37,44 +37,66 @@ sns.plotting_context()
 # -------------------
 
 project_dir = '/home/jwdegee/repos/2020_eLife_pupil_bias/'
-experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70']
+# experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70']
+experiment_names = ['yesno_audio', 'bias_manipulation']
 bin_measures = ['pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s']
-nrs_bins = [5,3,3]
+nrs_bins = [5,3]
 
 n_jobs = 25
-fit_model = 0
-versions = [0,1,2,3,4,]
-# versions = [5,6,7,8,9,]
+fit_model = 1
+# versions = [9,8,7,6,5,4,3,2,1,0]
+# versions = [4,3,2,1,0]
+versions = [9,8,7,6,5]
 # versions = [6,7]
 # versions = [8,9]
 # versions = [1,2,3,4]
 # versions = [0]
 
 # for analyse_exp in [0,1,2]:
-for analyse_exp in [1,2]:
+for analyse_exp in [1]:
 
     experiment_name, bin_measure, n_bins = experiment_names[analyse_exp], bin_measures[analyse_exp], nrs_bins[analyse_exp]
 
     # set options:
-    model_settings = [
-        
-        # separately per subject:
-        {'urgency':True, 'a_bin': True, 'u_bin': False, 'v_bin':True, 't_bin':True, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':True, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':True, 'a_bin': False, 'u_bin': True, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
+    if experiment_name == 'bias_manipulation':
+            model_settings = [
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['cons', 'bin'], 'b':['cons', 'bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons', 'bin'], 'b':['cons', 'bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons', 'bin'], 'b':['cons']       }},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons'],        'b':['cons', 'bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':['cons'],        'b':['cons']       }},
 
-        {'urgency':False, 'a_bin': True, 'u_bin': False, 'v_bin':True, 't_bin':True, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':True, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':False, 'a_bin': False, 'u_bin': False, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':True, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-        {'urgency':True, 'a_bin': False, 'u_bin': True, 'v_bin':False, 't_bin':False, 'z_bin':False, 'b_bin':False, 'n_bins':n_bins, 'T_dur':3, 'pool':False},
-    ]
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['cons', 'bin'], 'b':['cons', 'bin']}},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons', 'bin'], 'b':['cons', 'bin']}},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons', 'bin'], 'b':['cons']       }},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['cons'],        'b':['cons', 'bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':['bin'], 'v':None,    't':None,    'z':['cons'],        'b':['cons']       }},
+            ]
+    else:
+        model_settings = [
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':['bin'],  'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':None,    'v':None,    't':None,    'z':['bin'], 'b':['bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }},
+
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':['bin']}},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }},
+            {'urgency':False, 'T_dur':3, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}},
+            {'urgency':True, 'T_dur':3, 'depends_on': {'a':None,     'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }},
+            ]
 
     # load data:
-    df = pd.read_csv(os.path.join(project_dir, 'data', 'ddm', '{}.csv'.format(experiment_name)))
-    df['bin'] = df.groupby(['subj_idx'])[bin_measure].apply(pd.qcut, q=n_bins, labels=False)
+    if experiment_name == 'bias_manipulation':
+        df = pd.concat((pd.read_csv(os.path.join(project_dir, 'data', 'ddm', '{}_30.csv'.format(experiment_name))),
+                        pd.read_csv(os.path.join(project_dir, 'data', 'ddm', '{}_70.csv'.format(experiment_name))))).reset_index(drop=True)
+        df['cons'] = df['signal_probability'].copy()
+        df['cons'] = (df['cons']<50).astype(int)
+        df['bin'] = df.groupby(['subj_idx', 'cons'])[bin_measure].apply(pd.qcut, q=n_bins, labels=False)
+    else:
+        df = pd.read_csv(os.path.join(project_dir, 'data', 'ddm', '{}.csv'.format(experiment_name)))
+        df['bin'] = df.groupby(['subj_idx'])[bin_measure].apply(pd.qcut, q=n_bins, labels=False)
 
     # fix columns:
     df.loc[df['stimulus']==0, 'stimulus'] = -1
@@ -89,10 +111,10 @@ for analyse_exp in [1,2]:
     for version in versions:
 
         # cut dataframe:
-        df_emp = df.loc[:,['subj_idx', 'response', 'rt', 'stimulus', 'bin', 'correct', bin_measure]]
-
-        if model_settings[version]['pool']:
-            df_emp['subj_idx'] = 0
+        if experiment_name == 'bias_manipulation':
+            df_emp = df.loc[:,['subj_idx', 'response', 'rt', 'stimulus', 'correct', 'cons', 'bin', bin_measure]]
+        else:
+            df_emp = df.loc[:,['subj_idx', 'response', 'rt', 'stimulus', 'correct', 'bin', bin_measure]]
 
         if fit_model:
             # fit model:
@@ -110,9 +132,11 @@ for analyse_exp in [1,2]:
                 pars['subj_idx'] = subj_idx
                 params.append(pars)
                 model_nr += 1
-            params = pd.concat(params).reset_index(drop=True).melt(id_vars=['subj_idx'])
-            params['bin'] = np.array([int(c[-1]) if c[-1].isnumeric() else None for c in params['variable']])
-            params['variable'] = np.array([c[:-1] if c[-1].isnumeric() else c for c in params['variable']])
+            params = pd.concat(params).reset_index(drop=True)
+            
+            # .melt(id_vars=['subj_idx'])
+            # params['bin'] = np.array([int(c[-1]) if c[-1].isnumeric() else None for c in params['variable']])
+            # params['variable'] = np.array([c[:-1] if c[-1].isnumeric() else c for c in params['variable']])
             
             # save:
             params.to_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(experiment_name, version)))

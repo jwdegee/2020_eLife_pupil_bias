@@ -69,8 +69,8 @@ nrs_bins = [
     2,
     ]
 
-for analyse_exp in [0,1,2,3]:
-# for analyse_exp in [3]:
+# for analyse_exp in [0,1,2,3,4]:
+for analyse_exp in [4]:
 
     exp_name, rt_cutoff, pupil_cutoff, nr_bin = exp_names[analyse_exp], rt_cutoffs[analyse_exp], pupil_cutoffs[analyse_exp], nrs_bins[analyse_exp]
 
@@ -93,7 +93,8 @@ for analyse_exp in [0,1,2,3]:
     df['fa'] = ((df['stimulus']==0)&(df['response']==1)).astype(int)
     df['miss'] = ((df['stimulus']==1)&(df['response']==0)).astype(int)
     df['cr'] = ((df['stimulus']==0)&(df['response']==0)).astype(int)
-    
+    df['correct'] = (df['stimulus']==df['response']).astype(int)
+
     # rt distribution:
     fig = histogram(df, rt_cutoff)
     fig.savefig(os.path.join(project_dir, 'figs', 'rt_distribution_{}.pdf'.format(exp_name)))

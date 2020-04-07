@@ -1,6 +1,8 @@
 import os, itertools
 import numpy as np
 import pandas as pd
+import scipy as sp
+from scipy import stats
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -57,21 +59,27 @@ def params_melt(params, model_settings):
 # -------------------
 
 project_dir = '/home/jwdegee/repos/2020_eLife_pupil_bias/'
-experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70', 'image_recognition', 'bias_manipulation',]
-bin_measures = ['pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s']
-nrs_bins = [5,3,3,2,3]
+# experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70', 'image_recognition', 'bias_manipulation',]
+# bin_measures = ['pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s']
+# nrs_bins = [5,3,3,2,3]
+experiment_names = ['yesno_audio', 'bias_manipulation_30', 'bias_manipulation_70', 'image_recognition']
+bin_measures = ['pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s', 'pupil_resp_1s']
+nrs_bins = [5,3,3,2]
 
 n_jobs = 55
 analysis_step = 0
-versions = [1,2,3]
+# versions = [1,2,3]
 # versions = [5,6,7]
-
+# versions = [0,4]
 # versions = [1,2,3,5,6,7]
 
 # versions = [8,9,10,11]
-versions = [8,9,10]
+# versions = [8,9,10]
+
+versions = [6,5]
+
 # for analyse_exp in [0,1,2,3]:
-for analyse_exp in [3]:
+for analyse_exp in [2,3]:
     
     experiment_name, bin_measure, n_bins = experiment_names[analyse_exp], bin_measures[analyse_exp], nrs_bins[analyse_exp]
 
@@ -111,14 +119,14 @@ for analyse_exp in [3]:
     # else:
     model_settings = [
         # pyddm:
-        {'hierarchical': False, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}, 'urgency':False, 'T_dur':T_dur}, #0
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }, 'urgency':False, 'T_dur':T_dur}, #1
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}, 'urgency':False, 'T_dur':T_dur}, #2
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }, 'urgency':True,  'T_dur':T_dur}, #3
-        {'hierarchical': False, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}, 'urgency':True,  'T_dur':T_dur}, #4
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }, 'urgency':True,  'T_dur':T_dur}, #5
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}, 'urgency':True,  'T_dur':T_dur}, #6
-        {'hierarchical': False, 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }, 'urgency':True,  'T_dur':T_dur}, #7
+        {'hierarchical': False, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}, 'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #0
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }, 'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #1
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}, 'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #2
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }, 'start_bias': True,  'drift_bias': False, 'urgency':True,  'T_dur':T_dur}, #3
+        {'hierarchical': False, 'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}, 'start_bias': True,  'drift_bias': True,  'urgency':True,  'T_dur':T_dur}, #4
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':['bin'], 'b':None   }, 'start_bias': True,  'drift_bias': False, 'urgency':True,  'T_dur':T_dur}, #5
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}, 'start_bias': False, 'drift_bias': True,  'urgency':True,  'T_dur':T_dur}, #6
+        {'hierarchical': False, 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }, 'start_bias': True,  'drift_bias': False, 'urgency':True,  'T_dur':T_dur}, #7
         # hddm:
         {'hierarchical': True,  'depends_on': None},                                                                                                           #8
         {'hierarchical': True,  'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin']},              'urgency':False, 'T_dur':T_dur}, #9
@@ -170,10 +178,48 @@ for analyse_exp in [3]:
 
     # analyses:
     elif analysis_step == 2:
+        
+        for exp_name in experiment_names:
+            bics = []
+            for version in [1,2,3]:
+                bic = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(exp_name, version)))
+                bic['model'] = version
+                bics.append(bic[['bic', 'model']])
+            bics = pd.concat(bics)
+
+            # subtract bics:
+            subtract = np.array(bics.loc[bics['model']==bics['model'].max(), 'bic'])
+            for m in bics['model'].unique():
+                bics.loc[bics['model']==m, 'bic'] = np.array(bics.loc[bics['model']==m, 'bic']) - subtract
+            for version in [1,2]:
+                print('{}({}) --> {} ({})'.format(exp_name, version, round(bics.loc[bics['model']==version, 'bic'].mean(),2), round(bics.loc[bics['model']==version, 'bic'].sem(),2)))
+
+            bics = []
+            for version in [5,6,7]:
+                bic = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(exp_name, version)))
+                bic['model'] = version
+                bics.append(bic[['bic', 'model']])
+            bics = pd.concat(bics)
+
+            # subtract bics:
+            subtract = np.array(bics.loc[bics['model']==bics['model'].max(), 'bic'])
+            for m in bics['model'].unique():
+                bics.loc[bics['model']==m, 'bic'] = np.array(bics.loc[bics['model']==m, 'bic']) - subtract
+            for version in [5,6]:
+                print('{}({}) --> {} ({})'.format(exp_name, version, round(bics.loc[bics['model']==version, 'bic'].mean(),2), round(bics.loc[bics['model']==version, 'bic'].sem(),2)))
+        
+            # dics = []
+            # for version in [9,10,11]:
+            #     m = hddm_tools.load_ddm_per_group(os.path.join(project_dir, 'fits'), '{}_{}'.format(exp_name, version), n_models=1)[0]
+            #     dics.append(m.dic)
+            # dics = dics-dics[-1]
+            # print('{}({}) --> {}'.format(exp_name, version, dics))
+
         bics = []
         resids = []
         sdt_emps = []
         sdt_sims = []
+        df_sims = []
         for version in versions:
             
             print(version)
@@ -182,6 +228,7 @@ for analyse_exp in [3]:
             params = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(experiment_name, version)))            
             params = params_melt(params, model_settings[version])
             df_sim = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}_df_sim.csv'.format(experiment_name, version)))
+            df_sims.append(df_sim)
 
             # empirical and simulated SDT:
             if experiment_name == 'bias_manipulation':
@@ -192,6 +239,7 @@ for analyse_exp in [3]:
                 sdt_sim = analyses_tools.compute_behavior(df=df_sim, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
             sdt_emps.append(sdt_emp)
             sdt_sims.append(sdt_sim)
+            
             # # add pupil:
             # params[bin_measure] = np.NaN
             # sdt_emp[bin_measure] = np.NaN
@@ -206,19 +254,19 @@ for analyse_exp in [3]:
             #     if len(params_cut.index) == len(sdt_sim['subj_idx'].unique()):
             #         sdt_sim.loc[params_cut.index, bin_measure] = np.array(df_emp.groupby(['subj_idx', 'bin']).mean().reset_index().query('bin=={}'.format(b))[bin_measure])
 
-            # analysis:
-            if experiment_name == 'bias_manipulation':
-                for cons in [0,1]:
-                    fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']) & ((params['cons']==cons)|pd.isna(params['cons'])),:], x='bin')
-                    # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
-                    fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_{}.pdf'.format(experiment_name, version, cons)))
-            else:
-                fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
-                # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(experiment_name, version)))
+            # # analysis:
+            # if experiment_name == 'bias_manipulation':
+            #     for cons in [0,1]:
+            #         fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']) & ((params['cons']==cons)|pd.isna(params['cons'])),:], x='bin')
+            #         # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
+            #         fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_{}.pdf'.format(experiment_name, version, cons)))
+            # else:
+            #     fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
+            #     # fig = mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x=bin_measure)
+            #     fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(experiment_name, version)))
 
-                fig = analyses_tools.mixed_linear_modeling(sdt_emp, x='bin', df_sims=[sdt_sim], colors=['blue'])
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
+            #     fig = analyses_tools.mixed_linear_modeling(sdt_emp, x='bin', df_sims=[sdt_sim], colors=['blue'])
+            #     fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
 
             # resid:
             if experiment_name == 'bias_manipulation':
@@ -235,20 +283,32 @@ for analyse_exp in [3]:
             bics.append(bic)
 
         if (version == 3) | (version == 7):
+            
+            shell()
+
+            df_emp_ = df_emp.copy()
+            if experiment_name == 'image_recognition':
+                sdt_emp_ = analyses_tools.compute_behavior(df=df_emp_, groupby=['subj_idx'])
+                subjects = sdt_emp_.loc[sdt_emp_['c']<0,'subj_idx']
+                df_emp_.loc[df_emp_['subj_idx'].isin(subjects), 'response'] = (~df_emp_.loc[df_emp_['subj_idx'].isin(subjects), 'response'].astype(bool)).astype(int)
+            fig = analyses_tools.conditional_response_plot(df=df_emp_, quantiles=[0,0.1,0.3,0.5,0.7,0.9,1], y='response', ylim=(0.1, 0.9), df_sims=None, color=None)
+            fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_crf.pdf'.format(experiment_name, version)))
+            fig = analyses_tools.conditional_response_plot(df=df_emp_, quantiles=[0,0.1,0.3,0.5,0.7,0.9,1], y='correct', df_sims=None, color=None)
+            fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_caf.pdf'.format(experiment_name, version)))
 
             # SDT analysis:
             colors = sns.color_palette(n_colors=3)
             colors = [colors[2], colors[0], colors[1]]
-            if experiment_name == 'bias_manipulation':
-                for (c), d in df_emp.groupby(['cons']):
-                    sdt_sims_ = []
-                    for sdt_sim in sdt_sims:
-                        sdt_sims_.append(sdt_sim.loc[(sdt_sim['cons']==c),:])
-                    fig = mixed_linear_modeling(sdt_emp.loc[(sdt_emp['cons']==c),:], x='bin', df_sims=sdt_sims_, colors=colors)
-                    fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars_{}.pdf'.format(experiment_name, version, c)))
-            else:
-                fig = analyses_tools.mixed_linear_modeling(sdt_emp, x='bin', df_sims=sdt_sims, colors=colors)
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
+            # if experiment_name == 'bias_manipulation':
+            #     for (c), d in df_emp.groupby(['cons']):
+            #         sdt_sims_ = []
+            #         for sdt_sim in sdt_sims:
+            #             sdt_sims_.append(sdt_sim.loc[(sdt_sim['cons']==c),:])
+            #         fig = analyses_tools.mixed_linear_modeling(sdt_emp.loc[(sdt_emp['cons']==c),:], x='bin', df_sims=sdt_sims_, colors=colors)
+            #         fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars_{}.pdf'.format(experiment_name, version, c)))
+            # else:
+            fig = analyses_tools.mixed_linear_modeling(sdt_emp, x='bin', df_sims=sdt_sims, colors=colors)
+            fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_sdt_bars.pdf'.format(experiment_name, version)))
 
             # BICs & residuals:
             bics = pd.concat(bics)
@@ -269,6 +329,9 @@ for analyse_exp in [3]:
             # for m in resids['model'].unique():
             #     resids.loc[resids['model']==m, 'value'] = np.array(resids.loc[resids['model']==m, 'value']) - subtract
             
+            # # resids only in lowest and highest pupil bin:
+            # resids = resids.loc[(resids['bin']==min(resids['bin']))|(resids['bin']==max(resids['bin'])),:]
+
             for data, title in zip([bics, resids], ['bic', 'resid']):
 
                 fig = plt.figure(figsize=(1.5,1.5))

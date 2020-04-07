@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from statsmodels.stats.anova import AnovaRM
 from joblib import Parallel, delayed
 
 from IPython import embed as shell
@@ -313,4 +314,37 @@ def mixed_linear_modeling(df, x='bin', bic_diff=5, df_sims=None, colors=None):
 
     sns.despine(offset=2, trim=True)
     plt.tight_layout()
+    return fig
+
+def conditional_response_plot(df, quantiles=[0,0.1,0.3,0.5,0.7,0.9,1], y='response', ylim=None, df_sims=None, color=None):
+    
+    fig = plt.figure(figsize=(1.5,1.5))
+    ax = fig.add_subplot(1,1,1)
+    
+    df['rt_bin'] = df.groupby(['subj_idx', 'bin'])['rt'].apply(pd.qcut, quantiles, labels=False)
+    d = df.groupby(['subj_idx', 'bin', 'rt_bin']).mean().reset_index().groupby(['bin', 'rt_bin']).mean().reset_index()
+    ds = df.groupby(['subj_idx', 'bin', 'rt_bin']).mean().reset_index().groupby(['bin', 'rt_bin']).sem().reset_index()
+    plt.errorbar(x=d.loc[d['bin']==min(d['bin']), 'rt'], y=d.loc[d['bin']==min(d['bin']), y], yerr=ds.loc[ds['bin']==min(ds['bin']), y], color='black', ls='--')
+    plt.errorbar(x=d.loc[d['bin']==max(d['bin']), 'rt'], y=d.loc[d['bin']==max(d['bin']), y], yerr=ds.loc[ds['bin']==max(ds['bin']), y], color='black', ls='-')
+
+    aovrm = AnovaRM(df.groupby(['subj_idx', 'bin', 'rt_bin']).mean().reset_index(), y, 'subj_idx', within=['bin', 'rt_bin'], aggregate_func='mean')
+    res = aovrm.fit()
+    plt.title('bin: p={}; int: p={}'.format(round(res.anova_table.iloc[0]['Pr > F'],3),round(res.anova_table.iloc[2]['Pr > F'],3) ))
+
+    if not df_sims is None:
+        for df_sim, color in zip(df_sims, colors):
+            df_sim['rt_bin'] = df_sim.groupby(['subj_idx', 'bin'])['rt'].apply(pd.qcut, quantiles, labels=False)
+            d = df_sim.groupby(['subj_idx', 'bin', 'rt_bin']).mean().reset_index().groupby(['bin', 'rt_bin']).mean().reset_index()
+            plt.scatter(x=d.loc[d['bin']==min(d['bin']), 'rt'], y=d.loc[d['bin']==min(d['bin']), y], marker='x', color=color)
+            plt.scatter(x=d.loc[d['bin']==max(d['bin']), 'rt'], y=d.loc[d['bin']==max(d['bin']), y], marker='x', color=color)
+
+    # ax.set_title('P(corr.)={}, {}, {}\nP(bias)={}, {}, {}'.format(*means))
+    plt.axhline(0.5, lw=0.5, color='k')
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    ax.set_xlabel('RT (s)')
+    ax.set_ylabel('P({})'.format(y))
+    sns.despine(trim=True, offset=2)
+    plt.tight_layout()
+
     return fig

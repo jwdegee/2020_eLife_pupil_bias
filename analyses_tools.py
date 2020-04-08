@@ -39,6 +39,42 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     } )
 sns.plotting_context()
 
+def cluster_sig_bar_1samp(array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True, n_jobs=10):
+    
+    import mne
+
+    if cluster_correct:
+        whatever, clusters, pvals, bla = mne.stats.permutation_cluster_1samp_test(array, n_permutations=nrand, n_jobs=n_jobs)
+        for j, cl in enumerate(clusters):
+            if len(cl) == 0:
+                pass
+            else:
+                if pvals[j] < threshold:
+                    for c in cl:
+                        sig_bool_indices = np.arange(len(x))[c]
+                        xx = np.array(x[sig_bool_indices])
+                        try:
+                            xx[0] = xx[0] - (np.diff(x)[0] / 2.0)
+                            xx[1] = xx[1] + (np.diff(x)[0] / 2.0)
+                        except:
+                            xx = np.array([xx - (np.diff(x)[0] / 2.0), xx + (np.diff(x)[0] / 2.0),]).ravel()
+                        # ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], xx[0], xx[-1], color=color, alpha=1, linewidth=2.5)
+                        ax.hlines(yloc, xx[0], xx[-1], color=color, alpha=1, linewidth=2.5)
+
+    else:
+        p = np.zeros(array.shape[1])
+        for i in range(array.shape[1]):
+            # p[i] = sp.stats.ttest_rel(array[:,i], np.zeros(array.shape[0]))[1]
+            p[i] = sp.stats.wilcoxon(array[:,i], np.zeros(array.shape[0]))[1]
+        sig_indices = np.array(p < 0.05, dtype=int)
+        sig_indices[0] = 0
+        sig_indices[-1] = 0
+        s_bar = zip(np.where(np.diff(sig_indices)==1)[0]+1, np.where(np.diff(sig_indices)==-1)[0])
+        for sig in s_bar:
+            ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
+        
+    
+
 def is_outlier(points, thresh=3.5):
     """
     Returns a boolean array with True if points are outliers and False 
@@ -81,26 +117,47 @@ def histogram(df, span):
     plt.tight_layout()
     return fig
 
-def plot_responses(df, epochs, epochs_s, span=None):
+def plot_responses(df, epochs, epochs_s, span=None, stat_by=['subject'], bin_by='pupil_stim_1s'):
 
-    fig = plt.figure(figsize=(2,2))
+    fig = plt.figure(figsize=(3,1.5))
+    ax = fig.add_subplot(121)
     for e, ls in zip([epochs, epochs_s], ['-', '--']):
         x = np.array(e.columns, dtype=float)
         mean = e.groupby(df['subject']).mean().mean(axis=0)
         sem = e.groupby(df['subject']).mean().sem(axis=0)
         plt.fill_between(x, mean-sem, mean+sem, alpha=0.2, color='black')
-        plt.plot(x, mean, color='black', ls=ls)
+        plt.plot(x, mean, color='black', ls=ls)    
+    
+    e_for_stat = e.copy()
+    x = np.array(e_for_stat.columns, dtype=float)[1:]
+    for s in stat_by:
+        e_for_stat[s] = df[s]
+    e_for_stat = e_for_stat.set_index(stat_by)
+
+    cluster_sig_bar_1samp( np.array(e_for_stat.groupby(stat_by).mean())[:,1:], x, 1, 'black', ax, threshold=0.05, nrand=5000, cluster_correct=True, n_jobs=10)
     if span is not None:
         plt.axvspan(span[0], span[1], color='black', alpha=0.1)
     plt.axvline(0, lw=0.5, color='black')
+    plt.axhline(0, lw=0.5, color='black')
     plt.xlabel('Time (s)')
     plt.ylabel('Response (% change)')
+    
+    
+    ax = fig.add_subplot(121)
+
+    shell()
+    
     sns.despine(offset=2, trim=True)
     plt.tight_layout()
     return fig
 
 def composite_bias(df):
     
+    df['hit'] = ((df['stimulus']==1)&(df['response']==1)).astype(int)
+    df['fa'] = ((df['stimulus']==0)&(df['response']==1)).astype(int)
+    df['miss'] = ((df['stimulus']==1)&(df['response']==0)).astype(int)
+    df['cr'] = ((df['stimulus']==0)&(df['response']==0)).astype(int)
+
     # rates:
     hit_rates = np.array([np.sum(d['hit']) / (np.sum(d['hit']) + np.sum(d['miss'])) for v,d in df.groupby(['level'])])
     fa_rate = np.array([np.sum(d['fa']) / (np.sum(d['fa']) + np.sum(d['cr'])) for v,d in df.groupby(['level'])])[0]
@@ -200,9 +257,9 @@ def compute_behavior(df, groupby=['subj_idx', 'bin']):
 
     return params
 
-def mixed_linear_modeling(df, x='bin', bic_diff=5, df_sims=None, colors=None):
+def mixed_linear_modeling(df, x='bin', bic_diff=10, df_sims=None, colors=None):
 
-    fig = plt.figure(figsize=(1.25*len(df['variable'].unique()), 1.5))
+    fig = plt.figure(figsize=(1.1*len(df['variable'].unique()), 1.5))
     plt_nr = 1
     
     for param in df['variable'].unique():
@@ -213,15 +270,18 @@ def mixed_linear_modeling(df, x='bin', bic_diff=5, df_sims=None, colors=None):
 
         # sns.barplot(x='variable', y='value', hue='bin', units='subj_idx', palette='Reds', ci=None, data=df)
         # sns.barplot(x='variable', y='value', hue='bin', units='subj_idx', palette='Reds', ci=66, data=df)
-        # shell()
         kwargs = {'linewidths':0, 'markeredgewidth':0.5, 'markeredgecolor':'black', 'ecolor':'black'}
         if ('level' in data.columns) & ~(x=='level'):
-            sns.pointplot(x=x, y='value', hue='level', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, palette='Reds', data=data, zorder=1, **kwargs)
+            sns.pointplot(x=x, y='value', hue='level', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, palette='Greys', data=data, zorder=1, **kwargs)
         else:
-            sns.pointplot(x=x, y='value', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, palette='Reds', data=data, zorder=1, **kwargs)
+            sns.pointplot(x=x, y='value', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, color='grey', data=data, zorder=1, **kwargs)
         # sns.stripplot(x='variable', y='value', hue='bin', color='grey', size=2, jitter=False, dodge=True, data=df)
         # locs = np.sort(np.array([p.get_x() + p.get_width() / 2. for p in ax.patches]))
 
+        if param == 'rt':
+            mean_rt = data['value'].mean()
+            plt.ylim(mean_rt-0.25, mean_rt+0.25)
+        
         if len(data[x].unique()) > 2:
             # variables:
             data['intercept'] = 1
@@ -243,74 +303,68 @@ def mixed_linear_modeling(df, x='bin', bic_diff=5, df_sims=None, colors=None):
 
 
             # comparison:
-            try:
-                md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'], exog_re=exog1)
+            md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'], exog_re=exog1)
+            mdf1 = md1.fit(reml=False)
+            md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'], exog_re=exog2)
+            mdf2 = md2.fit(reml=False)
+            if mdf1.converged & mdf2.converged:
+                random = True
+            else:
+                md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'],)
                 mdf1 = md1.fit(reml=False)
-                mdf1.summary()
-            except:
-                md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'])
-                mdf1 = md1.fit(reml=False)
-                mdf1.summary()
-            try:
-                md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'], exog_re=exog2)
+                md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'],)
                 mdf2 = md2.fit(reml=False)
-                mdf2.summary()
-            except:
-                md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'])
-                mdf2 = md2.fit(reml=False)
-                mdf2.summary()
-            if (mdf1.aic - mdf2.aic) > bic_diff:
+                random = False
+            if (mdf1.bic - mdf2.bic) > bic_diff:
                 exog = exog2.copy()
             else:
                 exog = exog1.copy()
 
             # refit with reml:
-            try:
-                md = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx'], exog_re=exog)
-                mdf = md.fit()
-                mdf.summary()
-            except:
-                md = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx'])
-                mdf = md.fit()
-                mdf.summary()
+            if random:
+                mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx'], exog_re=exog).fit()
+            else:
+                mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx']).fit()
             print(mdf.summary())
             xx = np.sort(np.array([p.get_data()[0][0] for p in ax.lines]))
             if ('level' in data.columns) & ~(x=='level'):
-                if (mdf1.aic - mdf2.aic) > bic_diff:
+                if (mdf1.bic - mdf2.bic) > bic_diff:
                     yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
                                                 (b*mdf.params[x]) + ((b**2)*mdf.params['{}_^2'.format(x)]) for b in np.array(exog.groupby(x).mean().index)])
-                    plt.text(x=xx.min(), y=ax.get_ylim()[0]+((ax.get_ylim()[1]-ax.get_ylim()[0])*0.95), s='p={}\np1={}; p2={}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3), round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
+                    plt.title('p = {}\np1 = {}\np2 = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3), round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
                 else:
                     yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
                                                 (b*mdf.params[x]) for b in np.array(exog.groupby(x).mean().index)])
-                    plt.text(x=xx.min(), y=ax.get_ylim()[0]+((ax.get_ylim()[1]-ax.get_ylim()[0])*0.95), s='p={}; p={}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3)), size=6)
+                    plt.title('p = {}\np = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3)), size=6)
                 for v in exog.groupby('level').mean().index:
                     plt.plot(xx[int(v)::len(exog.groupby('level').mean().index)], yy[int(v)::len(exog.groupby('level').mean().index)], lw=1, color='black')
             else:
-                if (mdf1.aic - mdf2.aic) > bic_diff:
+                if (mdf1.bic - mdf2.bic) > bic_diff:
                     yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])+((np.array(exog.groupby(x).mean().index)**2)*mdf.params['{}_^2'.format(x)])
-                    plt.text(x=xx.min(), y=ax.get_ylim()[0]+((ax.get_ylim()[1]-ax.get_ylim()[0])*0.95), s='p1={}; p2={}'.format(round(mdf.pvalues[x],3),round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
+                    plt.title('p1 = {}\np2 = {}'.format(round(mdf.pvalues[x],3),round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
                 else:    
                     yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])
-                    plt.text(x=xx.min(), y=ax.get_ylim()[0]+((ax.get_ylim()[1]-ax.get_ylim()[0])*0.95), s='p={}'.format(round(mdf.pvalues[x],3)), size=6)
+                    plt.title('p = {}'.format(round(mdf.pvalues[x],3)), size=6)
                 plt.plot(xx, yy, lw=1, color='black')
 
         if not df_sims is None:
             if ('level' in data.columns) & ~(x=='level'):
-                sns.pointplot(x=x, y='value', color='blue', join=False, ci=None, markers='x', scale=0.66,
-                            data=df_sim.loc[df['variable']==param,:].groupby(['variable', x]).mean().reset_index(), zorder=100)
+                for df_sim, color in zip(df_sims, colors):
+                    sns.pointplot(x=x, y='value', hue='level', palette=['blue' for _ in range(len(data['level'].unique()))], join=False, ci=None, markers='x', scale=0.66,
+                    data=df_sim.loc[df['variable']==param,:], zorder=100)
             else:
                 for df_sim, color in zip(df_sims, colors):
-                    sns.pointplot(x=x, y='value', color=color, join=False, ci=None, markers='x', scale=0.66,
-                            data=df_sim.loc[df['variable']==param,:].groupby(['variable', x]).mean().reset_index(), zorder=100)
+                    sns.pointplot(x=x, y='value', color='blue', join=False, ci=None, markers='x', scale=0.66,
+                            data=df_sim.loc[df['variable']==param,:], zorder=100)
         try:
             plt.gca().get_legend().remove()
         except:
             pass
-        plt_nr += 1
-
-        plt.xticks(np.array(ax.get_xticks(), dtype=int))
+        
+        plt.xticks(ax.get_xticks(), list(np.array(ax.get_xticks(), dtype=int)))
         plt.ylabel(param)
+        
+        plt_nr += 1
 
     sns.despine(offset=2, trim=True)
     plt.tight_layout()

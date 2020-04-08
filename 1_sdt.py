@@ -1,18 +1,18 @@
-import os, glob
+import os, itertools
 import numpy as np
-import scipy as sp
-import scipy.stats as stats
 import pandas as pd
+import scipy as sp
+from scipy import stats
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import statsmodels.api as sm
-import statsmodels.formula.api as smf
+from statsmodels.stats.anova import AnovaRM
 from joblib import Parallel, delayed
 from IPython import embed as shell
 
 from tools_mcginley import utils
-from analyses_tools import *
+import analyses_tools
 
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
@@ -47,8 +47,8 @@ exp_names = [
     'image_recognition',
     ]
 rt_cutoffs = [
-    (0.24, 1.5),
-    (0.51, 1.0),
+    (0.28, 1.5),
+    (0.55, 1.0),
     (0.55, 2.5),
     (0.55, 2.5), 
     (0.55, 2.5),
@@ -56,12 +56,12 @@ rt_cutoffs = [
     ]
 
 pupil_cutoffs = [
-    [(0.04,0.19), (0.04,0.19),],
-    [(0.24,0.46), (0.24,0.46),],
-    [(0.24,0.5), (-0.55, -0.05)],
-    [(0.24,0.5), (-0.55, -0.05)],
-    [(0.24,0.5), (-0.55, -0.05)],
-    [(0.24,0.5), (-0.55, -0.05)],
+    [(0.04,0.23), (0.04,0.23),],
+    [(0.23,0.50), (0.23,0.50),],
+    [(0.23,0.5), (-0.55, -0.05)],
+    [(0.23,0.5), (-0.55, -0.05)],
+    [(0.23,0.5), (-0.55, -0.05)],
+    [(0.23,0.5), (-0.55, -0.05)],
     ]
 
 nrs_bins = [
@@ -111,18 +111,12 @@ for analyse_exp in [0,1]:
     epoch_p_resp = epoch_p_resp - baselines
 
     # rt distribution:
-    fig = histogram(df, rt_cutoff)
+    fig = analyses_tools.histogram(df, rt_cutoff)
     fig.savefig(os.path.join(project_dir, 'figs', 'rt_distribution_{}.pdf'.format(exp_name)))
 
-    # pupil responses:
-    fig = plot_responses(df, epoch_p_stim, epoch_p_s_stim, span=pupil_cutoff[0])
-    fig.savefig(os.path.join(project_dir, 'figs', 'responses_stim_{}.pdf'.format(exp_name)))
-    fig = plot_responses(df, epoch_p_resp, epoch_p_s_resp, span=pupil_cutoff[1])
-    fig.savefig(os.path.join(project_dir, 'figs', 'responses_resp_{}.pdf'.format(exp_name)))
-    
     # add blinks:
     df['blink'] = np.array(epoch_b_resp.loc[:,(x_resp>=pupil_cutoff[1][0])&(x_resp<=pupil_cutoff[1][1])].sum(axis=1) > 0.5)
-
+    
     # add pupil values:
     df['pupil_stim_1s'] = np.array(epoch_p_s_stim.loc[:,(x_s_stim>pupil_cutoff[0][0])&(x_s_stim<pupil_cutoff[0][1])].quantile(0.95, axis=1))
     df['pupil_resp_1s'] = np.array(epoch_p_s_resp.loc[:,(x_s_resp>pupil_cutoff[1][0])&(x_s_resp<pupil_cutoff[1][1])].quantile(0.95, axis=1))
@@ -138,18 +132,20 @@ for analyse_exp in [0,1]:
     omissions = (
         np.zeros(df.shape[0], dtype=bool)
         + np.array(df['response']==-1)
-        + np.array(df['rt'] < rt_cutoff[0])
-        + np.array(df['rt'] > rt_cutoff[1])
         + np.array(df['blink']==1)
         )
     if 'gonogo' in exp_name:
         omissions = omissions + np.array(df['interval']==1)
-        omissions = omissions + np.array(np.isnan(df['pupil_stim_1s'])) + np.array(is_outlier(df['pupil_stim_1s']))
-    else:
-        omissions = omissions + np.array(np.isnan(df['pupil_resp_1s'])) + np.array(is_outlier(df['pupil_resp_1s']))
-    if exp_name == 'image_recognition':
+    elif exp_name == 'image_recognition':
         omissions = omissions + np.isnan(df['emotional'])
-    
+    df = df.loc[~omissions,:].reset_index(drop=True)
+    epoch_p_stim = epoch_p_stim.loc[~omissions,:].reset_index(drop=True)
+    epoch_p_resp = epoch_p_resp.loc[~omissions,:].reset_index(drop=True)
+    epoch_p_s_stim = epoch_p_s_stim.loc[~omissions,:].reset_index(drop=True)
+    epoch_p_s_resp = epoch_p_s_resp.loc[~omissions,:].reset_index(drop=True)
+
+    # omissions step 2:
+    omissions = np.array(df['rt'] < rt_cutoff[0]) + np.array(df['rt'] > rt_cutoff[1]) + np.array(np.isnan(df['pupil_resp_1s'])) + np.array(analyses_tools.is_outlier(df['pupil_resp_1s']))
     df = df.loc[~omissions,:].reset_index(drop=True)
     epoch_p_stim = epoch_p_stim.loc[~omissions,:].reset_index(drop=True)
     epoch_p_resp = epoch_p_resp.loc[~omissions,:].reset_index(drop=True)
@@ -169,44 +165,55 @@ for analyse_exp in [0,1]:
 
     # save for ddm fitting:
     df.to_csv(os.path.join(project_dir, 'data', 'ddm', '{}.csv'.format(exp_name)))
-        
+
+    # pupil responses:
+    if 'mouse' in exp_name:
+        stat_by = ['subject', 'run']
+    else:
+        stat_by = ['subject']
+    fig = analyses_tools.plot_responses(df, epoch_p_stim, epoch_p_s_stim, span=pupil_cutoff[0], stat_by=stat_by, bin_by='pupil_stim_1s')
+    fig.savefig(os.path.join(project_dir, 'figs', 'responses_stim_{}.pdf'.format(exp_name)))
+    fig = analyses_tools.plot_responses(df, epoch_p_resp, epoch_p_s_resp, span=pupil_cutoff[1], stat_by=stat_by, bin_by='pupil_resp_1s')
+    fig.savefig(os.path.join(project_dir, 'figs', 'responses_resp_{}.pdf'.format(exp_name)))
+
     # sdt bars:
     if 'gonogo' in exp_name:
-        df = prepare_df(df)
+        df = analyses_tools.prepare_df(df)
+    
     for bin_measure in ['pupil_resp_1s', 'pupil_stim_1s']:
         if 'gonogo' in exp_name:
             df['bin'] = df.groupby(['subj_idx', 'level', 'stimulus'])[bin_measure].apply(pd.qcut, q=nr_bin, labels=False)
-            params = compute_behavior(df=df, groupby=['subj_idx', 'level', 'bin'])
+            params = analyses_tools.compute_behavior(df=df, groupby=['subj_idx', 'level', 'bin'])
             params = params.groupby(['subj_idx', 'bin']).mean().reset_index()
-            params['c2'] = np.array(df.groupby(['subj_idx', 'bin']).apply(composite_bias))
+            params['c2'] = np.array(df.groupby(['subj_idx', 'bin']).apply(analyses_tools.composite_bias))
             params = params.loc[:,params.columns!='level'].melt(id_vars=['subj_idx', 'bin'])
-        elif exp_name = 'image_recognition':
+        elif exp_name == 'image_recognition':
             df['bin'] = df.groupby(['subj_idx', 'emotional'])[bin_measure].apply(pd.qcut, q=nr_bin, labels=False)
-            params = compute_behavior(df=df, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
+            params = analyses_tools.compute_behavior(df=df, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
         else:
             df['bin'] = df.groupby(['subj_idx'])[bin_measure].apply(pd.qcut, q=nr_bin, labels=False)
-            params = compute_behavior(df=df, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
+            params = analyses_tools.compute_behavior(df=df, groupby=['subj_idx', 'bin']).melt(id_vars=['subj_idx', 'bin'])
+        
+        # # # add pupil response:
+        # # params[bin_measure] = np.NaN
+        # # for (v, b), params_cut in params.groupby(['variable', 'bin']):
+        # #     if len(params_cut.index) == len(params['subj_idx'].unique()):
+        # #         params.loc[params_cut.index, bin_measure] = np.array(df.groupby(['subj_idx', 'bin']).mean().reset_index().query('bin=={}'.format(b))[bin_measure])
 
-        # add pupil response:
-        params[bin_measure] = np.NaN
-        for (v, b), params_cut in params.groupby(['variable', 'bin']):
-            if len(params_cut.index) == len(params['subj_idx'].unique()):
-                params.loc[params_cut.index, bin_measure] = np.array(df.groupby(['subj_idx', 'bin']).mean().reset_index().query('bin=={}'.format(b))[bin_measure])
+        # # SDT plots:
+        # fig = analyses_tools.mixed_linear_modeling(params, 'bin')
+        # # fig = mixed_linear_modeling(params, bin_measure)
+        # fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_{}_{}.pdf'.format(exp_name, bin_measure)))
 
-        # SDT plots:
-        fig = mixed_linear_modeling(params, 'bin')
-        # fig = mixed_linear_modeling(params, bin_measure)
-        fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_{}_{}.pdf'.format(exp_name, bin_measure)))
+        # if 'gonogo' in exp_name:
+        #     df['bin'] = df.groupby(['subj_idx', 'level', 'stimulus'])[bin_measure].apply(pd.qcut, q=nr_bin, labels=False)
+        #     params = analyses_tools.compute_behavior(df=df, groupby=['subj_idx', 'level', 'bin']).melt(id_vars=['subj_idx', 'level', 'bin'])
 
-        if 'gonogo' in exp_name:
-            df['bin'] = df.groupby(['subj_idx', 'level', 'stimulus'])[bin_measure].apply(pd.qcut, q=nr_bin, labels=False)
-            params = compute_behavior(df=df, groupby=['subj_idx', 'level', 'bin']).melt(id_vars=['subj_idx', 'level', 'bin'])
+        #     fig = analyses_tools.mixed_linear_modeling(params.groupby(['subj_idx', 'variable', 'level']).mean().reset_index(), 'level')
+        #     # fig = analyses_tools.mixed_linear_modeling(params, bin_measure)
+        #     fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_level_{}_{}.pdf'.format(exp_name, bin_measure)))
 
-            fig = mixed_linear_modeling(params.groupby(['subj_idx', 'variable', 'level']).mean().reset_index(), 'level')
-            # fig = mixed_linear_modeling(params, bin_measure)
-            fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_level_{}_{}.pdf'.format(exp_name, bin_measure)))
-
-            fig = mixed_linear_modeling(params, 'bin')
-            # fig = mixed_linear_modeling(params, bin_measure)
-            fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_bin_level_{}_{}.pdf'.format(exp_name, bin_measure)))
-
+        #     fig = analyses_tools.mixed_linear_modeling(params, 'bin')
+        #     # fig = analyses_tools.mixed_linear_modeling(params, bin_measure)
+        #     fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_bin_level_{}_{}.pdf'.format(exp_name, bin_measure)))
+        

@@ -36,11 +36,30 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     } )
 sns.plotting_context()
 
-def params_melt(params, model_settings):
+def params_melt(params, model_settings, flip_b=False):
     try:
         params = params.loc[:,params.columns!='Unnamed: 0']
     except:
         pass
+    
+    # flip b & z:
+    if flip_b:
+        params_overall = pd.DataFrame({'subj_idx': np.array(df_emp.groupby(['subj_idx']).first().index.get_level_values('subj_idx')),
+                        'c': np.array(df_emp.groupby(['subj_idx']).apply(analyses_tools.behavior, 'c'))})
+        b_columns = params.columns[[p[0]=='b' for p in params.columns]]
+        for b_column in b_columns:
+            params['{}'.format(b_column)] = params[b_column]
+            for subj in params['subj_idx'].unique():
+                if params_overall.loc[params_overall['subj_idx'] == subj, 'c'].values < 0:
+                    params.loc[params['subj_idx'] == subj, '{}'.format(b_column)] = params.loc[params['subj_idx'] == subj, '{}'.format(b_column)] * -1
+        z_columns = params.columns[[p[0]=='z' for p in params.columns]]
+        for z_column in z_columns:
+            params['{}'.format(z_column)] = params[z_column]
+            for subj in params['subj_idx'].unique():
+                if params_overall.loc[params_overall['subj_idx'] == subj, 'c'].values < 0:
+                    params.loc[params['subj_idx'] == subj, '{}'.format(z_column)] = params.loc[params['subj_idx'] == subj, '{}'.format(z_column)] * -1
+    
+    # melt:
     params = params.melt(id_vars=['subj_idx'])
     for i in range(params.shape[0]):
         variable = "".join(itertools.takewhile(str.isalpha, params.loc[i,'variable']))
@@ -53,6 +72,7 @@ def params_melt(params, model_settings):
                 elif len(conditions) == 1:
                     params.loc[i,conditions[0]] = int(params.loc[i,'variable'][-1])
         params.loc[i,'variable'] = variable    
+    
     return params
 
 # all model elements:
@@ -72,16 +92,13 @@ analysis_step = 2
 # versions = [5,6,7]
 # versions = [0,4]
 # versions = [1,2,3,5,6,7]
-
 # versions = [8,9,10,11]
 # versions = [8,9,10]
-
 # versions = [8,9,10,11]
 versions = [11]
 
+# for analyse_exp in [0,1,2,3,4,5]:
 for analyse_exp in [0,1]:
-# for analyse_exp in [2,3,4,5]:
-    
     exp_name, bin_measure, n_bins = exp_names[analyse_exp], bin_measures[analyse_exp], nrs_bins[analyse_exp]
 
     # load data:
@@ -102,7 +119,7 @@ for analyse_exp in [0,1]:
         {'fit': 'pyddm', 'depends_on': {'a':None,    'u':None,    'v':None,    't':None,    'z':None,    'b':['bin']}, 'start_bias': False, 'drift_bias': True,  'urgency':True,  'T_dur':T_dur}, #6
         {'fit': 'pyddm', 'depends_on': {'a':None,    'u':['bin'], 'v':None,    't':None,    'z':None,    'b':None   }, 'start_bias': True,  'drift_bias': False, 'urgency':True,  'T_dur':T_dur}, #7
         # hddm:
-        {'fit': 'hddm',  'depends_on':{'a':None, 'u':None, 'v':None, 't':None, 'z':None, 'b':None},                    'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur},  #8
+        {'fit': 'hddm',  'depends_on':{'a':None, 'u':None, 'v':None, 't':None, 'z':None, 'b':None},                    'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #8
         {'fit': 'hddm',  'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin']},              'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #9
         {'fit': 'hddm',  'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'b':['bin']},              'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #10
         {'fit': 'hddm',  'depends_on': {'a':['bin'], 'u':None,    'v':['bin'], 't':['bin'], 'z':['bin'], 'b':['bin']}, 'start_bias': True,  'drift_bias': True,  'urgency':False, 'T_dur':T_dur}, #11
@@ -158,7 +175,7 @@ for analyse_exp in [0,1]:
             params.to_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(exp_name, version)))
 
         elif analysis_step == 1:
-
+            
             from accumodels import pyddm_tools, plot_tools
 
             # simulate data:
@@ -190,25 +207,13 @@ for analyse_exp in [0,1]:
             # load:
             params = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}.csv'.format(exp_name, version)))
             params.loc[:, [p[0]=='a' for p in params.columns]] = params.loc[:, [p[0]=='a' for p in params.columns]] * 2 
-            params = params_melt(params, model_settings[version])
+            if 'recognition' in exp_name:
+                params = params_melt(params, model_settings[version], flip_b=True)
+            else:
+                params = params_melt(params, model_settings[version])
             df_sim = pd.read_csv(os.path.join(project_dir, 'fits', '{}_{}_df_sim.csv'.format(exp_name, version)))
             df_sim.loc[df_sim['stimulus']==-1, 'stimulus'] = 0 # we now expects 0 and 1 as stimuli identifiers
             df_sims.append(df_sim)
-
-            # DDM bars:
-            if 'gonogo' in exp_name:
-                params_bin = params.groupby(['subj_idx', 'variable', 'bin']).mean().reset_index().drop('level', axis=1)
-                params_level = params.groupby(['subj_idx', 'variable', 'level']).mean().reset_index().drop('bin', axis=1)
-                fig = analyses_tools.mixed_linear_modeling(params_bin, x='bin')
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_bin.pdf'.format(exp_name, version)))
-                fig = analyses_tools.mixed_linear_modeling(params_level, x='level')
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_level.pdf'.format(exp_name, version)))
-                fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin'])&~pd.isnull(params['level']),:], x='bin')
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars1.pdf'.format(exp_name, version)))
-                
-            else:
-                fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
-                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(exp_name, version)))
 
             # empirical and simulated SDT:
             if 'gonogo' in exp_name:
@@ -235,7 +240,50 @@ for analyse_exp in [0,1]:
             sdt_emps.append(sdt_emp)
             sdt_sims.append(sdt_sim)
 
+            if not 'gonogo' in exp_name:
+                if exp_name == 'image_recognition':
+                    y = np.array(sdt_emp.loc[(sdt_emp['variable']=='cf')&(sdt_emp['bin']==max(sdt_emp['bin'])), 'value']) - np.array(sdt_emp.loc[(sdt_emp['variable']=='cf')&(sdt_emp['bin']==min(sdt_emp['bin'])), 'value'])
+                else:
+                    y = np.array(sdt_emp.loc[(sdt_emp['variable']=='c')&(sdt_emp['bin']==max(sdt_emp['bin'])), 'value']) - np.array(sdt_emp.loc[(sdt_emp['variable']=='c')&(sdt_emp['bin']==min(sdt_emp['bin'])), 'value'])
+                X = np.vstack(( np.array(params.loc[(params['variable']=='z')&(params['bin']==max(params['bin'])), 'value']) - np.array(params.loc[(params['variable']=='z')&(params['bin']==min(params['bin'])), 'value']),
+                                np.array(params.loc[(params['variable']=='b')&(params['bin']==max(params['bin'])), 'value']) - np.array(params.loc[(params['variable']=='b')&(params['bin']==min(params['bin'])), 'value'])))
+                X = sm.add_constant(X.T)
+                est = sm.OLS(y, X).fit()
+                print()
+                print()
+                print(est.summary())
+                r1,p1 = sp.stats.pearsonr(y, X[:,1])
+                r2,p2 = sp.stats.pearsonr(y, X[:,2])
 
+                fig = plt.figure(figsize=(1.75,1.6))
+                ax = fig.add_subplot(111)
+                sns.regplot(x=y, y=X[:,1], color='green', scatter_kws={'s':4}, ax=ax)
+                plt.xlabel('∆ criterion (s.d.)')
+                plt.ylabel('∆ starting point')
+                ax = ax.twinx()
+                sns.regplot(x=y, y=X[:,2], scatter_kws={'s':4}, ax=ax)
+                plt.ylabel('∆ drift bias')
+                plt.title('r={}, p={}\nr={}, p={}\n'.format(round(r1,3), round(p1,3), round(r2,3), round(p2,3)))
+                # sns.despine(offset=2, trim=True)
+                plt.tight_layout()
+                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_correlations.pdf'.format(exp_name, version)))
+            
+            # DDM bars:
+            if 'gonogo' in exp_name:
+                params_bin = params.groupby(['subj_idx', 'variable', 'bin']).mean().reset_index().drop('level', axis=1)
+                params_level = params.groupby(['subj_idx', 'variable', 'level']).mean().reset_index().drop('bin', axis=1)
+                fig = analyses_tools.mixed_linear_modeling(params_bin, x='bin')
+                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_bin.pdf'.format(exp_name, version)))
+                fig = analyses_tools.mixed_linear_modeling(params_level, x='level')
+                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars_level.pdf'.format(exp_name, version)))
+                fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin'])&~pd.isnull(params['level']),:], x='bin')
+                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars1.pdf'.format(exp_name, version)))
+                
+            else:
+                fig = analyses_tools.mixed_linear_modeling(params.loc[~pd.isnull(params['bin']),:], x='bin')
+                fig.savefig(os.path.join(project_dir, 'figs', 'ddm', '{}_{}_bars.pdf'.format(exp_name, version)))
+
+            # SDT bars:
             fig = analyses_tools.mixed_linear_modeling(sdt_emp, x='bin', df_sims=[sdt_sim], colors=['blue'])
             fig.savefig(os.path.join(project_dir, 'figs', '{}_{}_sdt_bars.pdf'.format(exp_name, version)))
 
@@ -246,14 +294,7 @@ for analyse_exp in [0,1]:
 
                 fig = analyses_tools.mixed_linear_modeling(sdt_emp_level, x='level', df_sims=[sdt_sim_level], colors=['blue'])
                 fig.savefig(os.path.join(project_dir, 'figs', '{}_{}_sdt_bars_level.pdf'.format(exp_name, version)))
-
-
-
-
-            # fig = analyses_tools.mixed_linear_modeling(sdt_emp, 'bin')
-            # fig.savefig(os.path.join(project_dir, 'figs', 'bars_sdt_bin_level_{}_{}.pdf'.format(exp_name, bin_measure)))
-            
-
+                        
             # resid:
             resid = pd.DataFrame(sdt_emp.loc[sdt_emp['variable']=='c', ['subj_idx', 'bin', 'value']]).reset_index(drop=True)
             resid['value'] = (resid['value'] - np.array(sdt_sim.loc[sdt_emp['variable']=='c', 'value']))**2

@@ -109,10 +109,11 @@ def is_outlier(points, thresh=3.5):
     return modified_z_score > thresh
 
 def histogram(df, span):
-    fig = plt.figure(figsize=(2,2))
+    fig = plt.figure(figsize=(1.5,1.5))
     plt.hist(df['rt'], bins=25)
     if span is not None:
         plt.axvspan(span[0], span[1], color='black', alpha=0.1)
+    plt.title('{}%'.format(round((df.loc[~np.isnan(df['rt']),'rt']<span[0]).mean()*100,3)))
     sns.despine(offset=2, trim=True)
     plt.tight_layout()
     return fig
@@ -128,12 +129,12 @@ def plot_responses(df, epochs, epochs_s, span=None, stat_by=['subject'], bin_by=
         plt.fill_between(x, mean-sem, mean+sem, alpha=0.2, color='black')
         plt.plot(x, mean, color='black', ls=ls)    
     
+    # stats:
     e_for_stat = e.copy()
     x = np.array(e_for_stat.columns, dtype=float)[1:]
     for s in stat_by:
         e_for_stat[s] = df[s]
     e_for_stat = e_for_stat.set_index(stat_by)
-
     cluster_sig_bar_1samp( np.array(e_for_stat.groupby(stat_by).mean())[:,1:], x, 1, 'black', ax, threshold=0.05, nrand=5000, cluster_correct=True, n_jobs=10)
     if span is not None:
         plt.axvspan(span[0], span[1], color='black', alpha=0.1)
@@ -141,11 +142,22 @@ def plot_responses(df, epochs, epochs_s, span=None, stat_by=['subject'], bin_by=
     plt.axhline(0, lw=0.5, color='black')
     plt.xlabel('Time (s)')
     plt.ylabel('Response (% change)')
-    
-    
-    ax = fig.add_subplot(121)
-
-    shell()
+        
+    ax = fig.add_subplot(122)
+    for e, ls in zip([epochs], ['-']):
+        e['subject'] = df['subject']
+        e['bin'] = df.groupby(['subject'])[bin_by].apply(pd.qcut, q=3, labels=False)
+        e = e.set_index(['subject', 'bin'])
+        x = np.array(e.columns, dtype=float)
+        means = e.groupby(['subject', 'bin']).mean().groupby('bin').mean()
+        sems = e.groupby(['subject', 'bin']).mean().groupby('bin').sem()
+        for i in range(means.shape[0]):        
+            plt.fill_between(x, means.iloc[i]-sems.iloc[i], means.iloc[i]+sems.iloc[i], alpha=0.2, color='black')
+            plt.plot(x, means.iloc[i], color='black', ls=ls)
+    plt.axvline(0, lw=0.5, color='black')
+    plt.axhline(0, lw=0.5, color='black')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Response (% change)')
     
     sns.despine(offset=2, trim=True)
     plt.tight_layout()
@@ -272,15 +284,14 @@ def mixed_linear_modeling(df, x='bin', bic_diff=10, df_sims=None, colors=None):
         # sns.barplot(x='variable', y='value', hue='bin', units='subj_idx', palette='Reds', ci=66, data=df)
         kwargs = {'linewidths':0, 'markeredgewidth':0.5, 'markeredgecolor':'black', 'ecolor':'black'}
         if ('level' in data.columns) & ~(x=='level'):
-            sns.pointplot(x=x, y='value', hue='level', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, palette='Greys', data=data, zorder=1, **kwargs)
+            sns.pointplot(x=x, y='value', hue='level', units='subj_idx', join=False, ci=66, scale=0.50, errwidth=1, palette='Greys', data=data, zorder=1, **kwargs)
         else:
             sns.pointplot(x=x, y='value', units='subj_idx', join=False, ci=66, scale=0.66, errwidth=1, color='grey', data=data, zorder=1, **kwargs)
         # sns.stripplot(x='variable', y='value', hue='bin', color='grey', size=2, jitter=False, dodge=True, data=df)
         # locs = np.sort(np.array([p.get_x() + p.get_width() / 2. for p in ax.patches]))
 
         if param == 'rt':
-            mean_rt = data['value'].mean()
-            plt.ylim(mean_rt-0.25, mean_rt+0.25)
+            plt.ylim(data['value'].mean()-0.1, data['value'].mean()+0.1)
         
         if len(data[x].unique()) > 2:
             # variables:
@@ -303,49 +314,56 @@ def mixed_linear_modeling(df, x='bin', bic_diff=10, df_sims=None, colors=None):
 
 
             # comparison:
-            md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'], exog_re=exog1)
-            mdf1 = md1.fit(reml=False)
-            md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'], exog_re=exog2)
-            mdf2 = md2.fit(reml=False)
-            if mdf1.converged & mdf2.converged:
-                random = True
-            else:
-                md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'],)
+            try:
+                md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'], exog_re=exog1)
                 mdf1 = md1.fit(reml=False)
-                md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'],)
+                md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'], exog_re=exog2)
                 mdf2 = md2.fit(reml=False)
-                random = False
-            if (mdf1.bic - mdf2.bic) > bic_diff:
-                exog = exog2.copy()
-            else:
-                exog = exog1.copy()
-
-            # refit with reml:
-            if random:
-                mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx'], exog_re=exog).fit()
-            else:
-                mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx']).fit()
-            print(mdf.summary())
-            xx = np.sort(np.array([p.get_data()[0][0] for p in ax.lines]))
-            if ('level' in data.columns) & ~(x=='level'):
-                if (mdf1.bic - mdf2.bic) > bic_diff:
-                    yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
-                                                (b*mdf.params[x]) + ((b**2)*mdf.params['{}_^2'.format(x)]) for b in np.array(exog.groupby(x).mean().index)])
-                    plt.title('p = {}\np1 = {}\np2 = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3), round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
+                if mdf1.converged & mdf2.converged:
+                    random = True
                 else:
-                    yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
-                                                (b*mdf.params[x]) for b in np.array(exog.groupby(x).mean().index)])
-                    plt.title('p = {}\np = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3)), size=6)
-                for v in exog.groupby('level').mean().index:
-                    plt.plot(xx[int(v)::len(exog.groupby('level').mean().index)], yy[int(v)::len(exog.groupby('level').mean().index)], lw=1, color='black')
-            else:
+                    md1 = sm.MixedLM(endog, exog1, data.loc[:,'subj_idx'],)
+                    mdf1 = md1.fit(reml=False)
+                    md2 = sm.MixedLM(endog, exog2, data.loc[:,'subj_idx'],)
+                    mdf2 = md2.fit(reml=False)
+                    random = False
                 if (mdf1.bic - mdf2.bic) > bic_diff:
-                    yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])+((np.array(exog.groupby(x).mean().index)**2)*mdf.params['{}_^2'.format(x)])
-                    plt.title('p1 = {}\np2 = {}'.format(round(mdf.pvalues[x],3),round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
-                else:    
-                    yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])
-                    plt.title('p = {}'.format(round(mdf.pvalues[x],3)), size=6)
-                plt.plot(xx, yy, lw=1, color='black')
+                    exog = exog2.copy()
+                else:
+                    exog = exog1.copy()
+
+                # refit with reml:
+                if random:
+                    mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx'], exog_re=exog).fit()
+                else:
+                    mdf = sm.MixedLM(endog, exog, groups=data.loc[:,'subj_idx']).fit()
+                print(mdf.summary())
+                xx = np.sort(np.array([p.get_data()[0][0] for p in ax.lines]))
+                if ('level' in data.columns) & ~(x=='level'):
+                    if (mdf1.bic - mdf2.bic) > bic_diff:
+                        yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
+                                                    (b*mdf.params[x]) + ((b**2)*mdf.params['{}_^2'.format(x)]) for b in np.array(exog.groupby(x).mean().index)])
+                        plt.title('p = {}\np1 = {}\np2 = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3), round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
+                    else:
+                        yy = np.concatenate([mdf.params['intercept']+(np.array(exog.groupby('level').mean().index)*mdf.params['level']) + 
+                                                    (b*mdf.params[x]) for b in np.array(exog.groupby(x).mean().index)])
+                        plt.title('p = {}\np = {}'.format(round(mdf.pvalues['level'],3), round(mdf.pvalues[x],3)), size=6)
+                    for v in exog.groupby('level').mean().index:
+                        plt.plot(xx[int(v)::len(exog.groupby('level').mean().index)], yy[int(v)::len(exog.groupby('level').mean().index)], lw=1, color='black')
+                else:
+                    if (mdf1.bic - mdf2.bic) > bic_diff:
+                        yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])+((np.array(exog.groupby(x).mean().index)**2)*mdf.params['{}_^2'.format(x)])
+                        plt.title('p1 = {}\np2 = {}'.format(round(mdf.pvalues[x],3),round(mdf.pvalues['{}_^2'.format(x)],3)), size=6)
+                    else:    
+                        yy = mdf.params['intercept']+(np.array(exog.groupby(x).mean().index)*mdf.params[x])
+                        plt.title('p = {}'.format(round(mdf.pvalues[x],3)), size=6)
+                    plt.plot(xx, yy, lw=1, color='black')
+            except:
+                pass
+        else:
+
+            t,p = sp.stats.ttest_rel(data.loc[data[x]==0, 'value'], data.loc[data[x]==1, 'value'])
+            plt.title('p = {}'.format(round(p,3)), size=6)
 
         if not df_sims is None:
             if ('level' in data.columns) & ~(x=='level'):
